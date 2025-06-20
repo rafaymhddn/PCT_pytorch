@@ -3,6 +3,7 @@ import glob
 import h5py
 import numpy as np
 from torch.utils.data import Dataset
+from vis import *
 
 
 def download():
@@ -82,10 +83,100 @@ class ModelNet40(Dataset):
     def __len__(self):
         return self.data.shape[0]
 
+# Data loader Test
+
+import os
+import random
+import numpy as np
+from torch.utils.data import Dataset
+from sklearn.model_selection import train_test_split
+
+def custom_collate(batch):
+    return {
+        'point_cloud': [item['point_cloud'] for item in batch],
+        'mask': [item['mask'] for item in batch],
+        'bbox3d': [item['bbox3d'] for item in batch]
+    }
+
+class PickPlaceDataset(Dataset):
+    def __init__(self, root_dir, sample_ids):
+        self.root_dir = root_dir
+        self.sample_ids = sample_ids
+
+    def __len__(self):
+        return len(self.sample_ids)
+
+    def __getitem__(self, idx):
+        sample_id = self.sample_ids[idx]
+        sample_path = os.path.join(self.root_dir, sample_id)
+
+        pc = np.load(os.path.join(sample_path, 'pc.npy'))        # [N, 3]
+        mask = np.load(os.path.join(sample_path, 'mask.npy'))    # [N]
+        bbox = np.load(os.path.join(sample_path, 'bbox3d.npy'))  # [B, 7] or similar
+
+        return {
+            'point_cloud': pc.astype(np.float32),
+            'mask': mask.astype(np.int64),
+            'bbox3d': bbox.astype(np.float32)
+        }
+
+def get_dataloaders(data_root, batch_size=16, seed=42, train_size=0.8):
+        
+        all_sample_ids = sorted(os.listdir(data_root))
+        all_sample_ids = [s for s in all_sample_ids if os.path.isdir(os.path.join(data_root, s))]
+
+        random.seed(seed)
+        random.shuffle(all_sample_ids)
+
+        train_ids, temp_ids = train_test_split(
+        all_sample_ids, test_size=(1-train_size), random_state=seed
+        )
+    
+        # test and val split 50:50
+        val_ids, test_ids = train_test_split(
+        temp_ids, test_size=(0.5), random_state=seed
+        )
+
+        train_set = PickPlaceDataset(data_root, train_ids)
+        val_set = PickPlaceDataset(data_root, val_ids)
+        test_set = PickPlaceDataset(data_root, test_ids)
+
+        #print(f"Dataset sizes - Train: {len(train_set)}, Val: {len(val_set)}, Test: {len(test_set)}")
+
+        train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True, collate_fn=custom_collate)
+        val_loader = DataLoader(val_set, batch_size=batch_size, shuffle=False, collate_fn=custom_collate)
+        test_loader = DataLoader(test_set, batch_size=batch_size, shuffle=False, collate_fn=custom_collate)
+
+        return train_loader, val_loader, test_loader
+
 
 if __name__ == '__main__':
-    train = ModelNet40(1024)
-    test = ModelNet40(1024, 'test')
-    for data, label in train:
-        print(data.shape)
-        print(label.shape)
+
+
+    import os
+    import random
+    from torch.utils.data import DataLoader
+    from sklearn.model_selection import train_test_split
+
+    
+    
+    # Testing
+    
+    data_root = 'data/pick_place'
+    train_loader, val_loader, test_loader = get_dataloaders(data_root)
+
+    for batch in train_loader:
+        pc = batch['point_cloud']  # [3, H, W]
+        mask = batch['mask']       # [N, H, W]
+        bbox = batch['bbox3d']     # [N, 8, 3] 
+
+        print("point_cloud shape:", np.array(pc[0]).shape)
+        print("mask shape:", np.array(mask[0]).shape)
+        print("bbox3d shape:", np.array(bbox[0]).shape)
+
+        visualize_sample(pc[0], mask[0], bbox[0])
+       
+    
+        break
+
+
