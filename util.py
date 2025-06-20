@@ -1,6 +1,7 @@
 import torch
 import torch.nn.functional as F
 #from pointnet2_ops import pointnet2_utils
+from pytorch3d.ops import sample_farthest_points
 
 
 def cal_loss(pred, ground_truth, smoothing=True):
@@ -23,27 +24,60 @@ def cal_loss(pred, ground_truth, smoothing=True):
     return loss
 
 
-def furthest_point_sample(xyz, npoint):
+def furthest_point_sample_custom(xyz, npoint):
     """
+    Performs Furthest Point Sampling on a point cloud.
+
     Input:
-        xyz: pointcloud data, [B, N, 3]
-        npoint: number of samples
+        xyz: pointcloud data, shape [B, N, C]
+             B: batch size
+             N: number of points
+             C: number of coordinates (e.g., 3 for x, y, z)
+        npoint: number of points to sample
+    
     Return:
-        centroids: sampled pointcloud index, [B, npoint]
+        centroids: tensor of sampled point indices, shape [B, npoint]
     """
     device = xyz.device
     B, N, C = xyz.shape
+    
+    # Initialize a tensor to store the indices of the sampled points.
+    # The dtype is torch.long because these are indices.
     centroids = torch.zeros(B, npoint, dtype=torch.long).to(device)
+    
+    # Initialize a tensor to store the shortest distance from each point to any sampled point.
+    # Initialize with a large value.
     distance = torch.ones(B, N).to(device) * 1e10
+    
+    # Randomly select the first point to start the sampling.
+    # Or you can deterministicly select the first point (e.g., farthest = torch.zeros(B, dtype=torch.long).to(device))
     farthest = torch.randint(0, N, (B,), dtype=torch.long).to(device)
+    
+    # Helper tensor for batch indexing
     batch_indices = torch.arange(B, dtype=torch.long).to(device)
+    
+    # Iteratively select the furthest points
     for i in range(npoint):
+        # Save the current farthest point index
         centroids[:, i] = farthest
-        centroid = xyz[batch_indices, farthest, :].view(B, 1, 3)
+        
+        # Get the coordinates of the current farthest point
+        centroid = xyz[batch_indices, farthest, :].view(B, 1, C)
+        
+        # Calculate the squared Euclidean distance from all points to this new centroid
         dist = torch.sum((xyz - centroid) ** 2, -1)
+        
+        # Create a mask to update the distances. We only update the distance if the new
+        # calculated distance is smaller than the existing shortest distance.
         mask = dist < distance
         distance[mask] = dist[mask]
+        
+        # Select the next farthest point, which is the point with the maximum shortest distance
         farthest = torch.max(distance, -1)[1]
+        
+    # *** THIS IS THE CRUCIAL LINE THAT WAS LIKELY MISSING ***
+    return centroids
+
 
 def square_distance(src, dst):
     """
@@ -152,7 +186,8 @@ def sample_and_ball_group(s, radius, n, coords, features):
 
     # FPS sampling
     #fps_idx = pointnet2_utils.furthest_point_sample(coords, s).long()  # [B, s]
-    fps_idx = furthest_point_sample(coords, s).long()
+    #fps_idx = furthest_point_sample_custom(coords, s).long()
+    fps_coords, fps_idx = sample_farthest_points(coords, K=s)
     new_coords = index_points(coords, fps_idx)                         # [B, s, 3]
     new_features = index_points(features, fps_idx)                     # [B, s, D]
 
@@ -188,7 +223,8 @@ def sample_and_knn_group(s, k, coords, features):
 
     # FPS sampling
     #fps_idx = pointnet2_utils.furthest_point_sample(coords, s).long()  # [B, s]
-    fps_idx = furthest_point_sample(coords, s).long()
+    #fps_idx = furthest_point_sample_custom(coords, s).long()
+    fps_coords, fps_idx = sample_farthest_points(coords, K=s)
     new_coords = index_points(coords, fps_idx)                         # [B, s, 3]
     new_features = index_points(features, fps_idx)                     # [B, s, D]
 
