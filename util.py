@@ -1,6 +1,6 @@
 import torch
 import torch.nn.functional as F
-from pointnet2_ops import pointnet2_utils
+#from pointnet2_ops import pointnet2_utils
 
 
 def cal_loss(pred, ground_truth, smoothing=True):
@@ -22,6 +22,28 @@ def cal_loss(pred, ground_truth, smoothing=True):
 
     return loss
 
+
+def furthest_point_sample(xyz, npoint):
+    """
+    Input:
+        xyz: pointcloud data, [B, N, 3]
+        npoint: number of samples
+    Return:
+        centroids: sampled pointcloud index, [B, npoint]
+    """
+    device = xyz.device
+    B, N, C = xyz.shape
+    centroids = torch.zeros(B, npoint, dtype=torch.long).to(device)
+    distance = torch.ones(B, N).to(device) * 1e10
+    farthest = torch.randint(0, N, (B,), dtype=torch.long).to(device)
+    batch_indices = torch.arange(B, dtype=torch.long).to(device)
+    for i in range(npoint):
+        centroids[:, i] = farthest
+        centroid = xyz[batch_indices, farthest, :].view(B, 1, 3)
+        dist = torch.sum((xyz - centroid) ** 2, -1)
+        mask = dist < distance
+        distance[mask] = dist[mask]
+        farthest = torch.max(distance, -1)[1]
 
 def square_distance(src, dst):
     """
@@ -129,7 +151,8 @@ def sample_and_ball_group(s, radius, n, coords, features):
     coords = coords.contiguous()
 
     # FPS sampling
-    fps_idx = pointnet2_utils.furthest_point_sample(coords, s).long()  # [B, s]
+    #fps_idx = pointnet2_utils.furthest_point_sample(coords, s).long()  # [B, s]
+    fps_idx = furthest_point_sample(coords, s).long()
     new_coords = index_points(coords, fps_idx)                         # [B, s, 3]
     new_features = index_points(features, fps_idx)                     # [B, s, D]
 
@@ -164,7 +187,8 @@ def sample_and_knn_group(s, k, coords, features):
     coords = coords.contiguous()
 
     # FPS sampling
-    fps_idx = pointnet2_utils.furthest_point_sample(coords, s).long()  # [B, s]
+    #fps_idx = pointnet2_utils.furthest_point_sample(coords, s).long()  # [B, s]
+    fps_idx = furthest_point_sample(coords, s).long()
     new_coords = index_points(coords, fps_idx)                         # [B, s, 3]
     new_features = index_points(features, fps_idx)                     # [B, s, D]
 
