@@ -1,9 +1,9 @@
-import os, random
+import os
 import glob
 import numpy as np
-from torch.utils.data import Dataset, DataLoader
-from sklearn.model_selection import train_test_split
+from torch.utils.data import Dataset
 from vis import *
+from sklearn.model_selection import train_test_split
 
 
 
@@ -93,7 +93,7 @@ def get_dataloaders(data_root, batch_size=16, seed=42, train_size=0.8):
         val_set = PickPlaceDataset(data_root, val_ids)
         test_set = PickPlaceDataset(data_root, test_ids)
 
-        #print(f"Dataset sizes - Train: {len(train_set)}, Val: {len(val_set)}, Test: {len(test_set)}")
+        print(f"Dataset sizes - Train: {len(train_set)}, Val: {len(val_set)}, Test: {len(test_set)}")
 
         train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True, collate_fn=custom_collate)
         val_loader = DataLoader(val_set, batch_size=batch_size, shuffle=False, collate_fn=custom_collate)
@@ -105,6 +105,15 @@ def get_dataloaders(data_root, batch_size=16, seed=42, train_size=0.8):
 if __name__ == '__main__':
 
 
+    import os
+    import random
+    from torch.utils.data import DataLoader
+    from sklearn.model_selection import train_test_split
+
+    
+    
+    # Testing
+    
     data_root = 'data/pick_place'
     train_loader, val_loader, test_loader = get_dataloaders(data_root)
 
