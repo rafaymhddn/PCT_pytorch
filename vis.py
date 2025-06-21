@@ -2,6 +2,69 @@ import numpy as np
 import open3d as o3d
 import matplotlib.pyplot as plt
 
+
+import plotly.graph_objects as go
+import numpy as np
+
+def visualize_sample_plotly(pc, mask, bbox3d):
+    pc = np.array(pc)
+    mask = np.array(mask)
+    bbox3d = np.array(bbox3d)
+
+    H, W, _ = pc.shape
+    points = pc.reshape(-1, 3)  # [H*W, 3]
+
+    # Determine instance ids for each point using masks
+    instance_ids = np.zeros(H * W, dtype=int) - 1  # -1 for background
+    for idx in range(mask.shape[0]):
+        m = mask[idx].reshape(-1)  # [H*W]
+        instance_ids[m > 0] = idx
+
+    # Generate colors for each instance
+    colors = np.zeros((H * W, 3))
+    num_instances = mask.shape[0]
+    colormap = np.random.rand(num_instances, 3)  # Random color per instance
+
+    for i in range(H * W):
+        inst_id = instance_ids[i]
+        if inst_id >= 0:
+            colors[i] = colormap[inst_id]
+
+    # Point cloud scatter
+    scatter = go.Scatter3d(
+        x=points[:, 0],
+        y=points[:, 1],
+        z=points[:, 2],
+        mode='markers',
+        marker=dict(size=2, color=['rgb({}, {}, {})'.format(*c * 255) for c in colors])
+    )
+
+    # Draw bounding boxes as lines
+    lines = []
+    edges = [
+        (0, 1), (1, 2), (2, 3), (3, 0),  # Bottom face
+        (4, 5), (5, 6), (6, 7), (7, 4),  # Top face
+        (0, 4), (1, 5), (2, 6), (3, 7)   # Vertical edges
+    ]
+
+    for box in bbox3d:
+        for (i, j) in edges:
+            lines.append(
+                go.Scatter3d(
+                    x=[box[i, 0], box[j, 0]],
+                    y=[box[i, 1], box[j, 1]],
+                    z=[box[i, 2], box[j, 2]],
+                    mode='lines',
+                    line=dict(color='black', width=2),
+                    showlegend=False
+                )
+            )
+
+    fig = go.Figure(data=[scatter] + lines)
+    fig.update_layout(scene=dict(aspectmode='data'), title="3D Point Cloud with Masks and BBoxes")
+    fig.show()
+
+
 def visualize_sample(pc, masks, bboxes):
     """
     Visualize a single sample with its instance masks and bounding boxes.

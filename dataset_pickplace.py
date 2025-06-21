@@ -126,7 +126,7 @@ if __name__ == '__main__':
         print("mask shape:", np.array(mask[0]).shape)
         print("bbox3d shape:", np.array(bbox[0]).shape)
 
-        visualize_sample(pc[0], mask[0], bbox[0])
+        visualize_sample_plotly(pc[0], mask[0], bbox[0])
        
     
         break
