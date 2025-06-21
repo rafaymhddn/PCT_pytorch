@@ -97,3 +97,47 @@ Train 18, loss: 2.789157, train acc: 0.379902, train avg acc: 0.194198
 Test 18, loss: 2.666588, test acc: 0.401945, test avg acc: 0.266709
 Train 19, loss: 2.787667, train acc: 0.381127, train avg acc: 0.192673
 Test 19, loss: 2.610812, test acc: 0.398298, test avg acc: 0.274052
+Namespace(exp_name='pct_cls', model='pct', dataset='modelnet40', batch_size=32, test_batch_size=16, epochs=250, use_sgd=True, lr=0.0001, momentum=0.9, no_cuda=False, seed=1, eval=False, num_points=1024, dropout=0.5, model_path='')
+Using CPU
+Namespace(exp_name='pct_cls', model='pct', dataset='modelnet40', batch_size=2, test_batch_size=16, epochs=5, use_sgd=True, lr=0.0001, momentum=0.9, no_cuda=False, seed=1, eval=False, num_points=1024, dropout=0.5, model_path='')
+Using CPU
+Namespace(exp_name='pct_cls', model='pct', dataset='modelnet40', batch_size=2, test_batch_size=16, epochs=5, use_sgd=True, lr=0.0001, momentum=0.9, no_cuda=False, seed=1, eval=False, num_points=1024, dropout=0.5, model_path='')
+Using CPU
+Namespace(exp_name='pct_cls', model='pct', dataset='modelnet40', batch_size=2, test_batch_size=16, epochs=5, use_sgd=True, lr=0.0001, momentum=0.9, no_cuda=False, seed=1, eval=False, num_points=1024, dropout=0.5, model_path='')
+Using CPU
+Namespace(exp_name='pct_cls', model='pct', dataset='modelnet40', batch_size=2, test_batch_size=16, epochs=5, use_sgd=True, lr=0.0001, momentum=0.9, no_cuda=False, seed=1, eval=False, num_points=1024, dropout=0.5, model_path='')
+Using Apple MPS (Metal Performance Shaders) backend
+Namespace(exp_name='pct_cls', model='pct', dataset='modelnet40', batch_size=2, test_batch_size=16, epochs=5, use_sgd=True, lr=0.0001, momentum=0.9, no_cuda=False, seed=1, eval=False, num_points=1024, dropout=0.5, model_path='')
+Using Apple MPS (Metal Performance Shaders) backend
+Namespace(exp_name='pct_cls', model='pct', dataset='modelnet40', batch_size=2, test_batch_size=16, epochs=5, use_sgd=True, lr=0.0001, momentum=0.9, no_cuda=False, seed=1, eval=False, num_points=1024, dropout=0.5, model_path='')
+Using Apple MPS (Metal Performance Shaders) backend
+Namespace(exp_name='pct_cls', model='pct', dataset='modelnet40', batch_size=2, test_batch_size=2, epochs=5, use_sgd=True, lr=0.0001, momentum=0.9, no_cuda=False, seed=1, eval=False, num_points=1024, dropout=0.5, model_path='')
+Using Apple MPS (Metal Performance Shaders) backend
+Namespace(exp_name='pct_cls', model='navie_pct', dataset='modelnet40', batch_size=1, test_batch_size=2, epochs=1, use_sgd=True, lr=0.0001, momentum=0.9, no_cuda=False, seed=1, eval=False, num_points=512, dropout=0.5, model_path='')
+Using Apple MPS (Metal Performance Shaders) backend
+Namespace(exp_name='pct_cls', model='navie_pct', dataset='modelnet40', batch_size=1, test_batch_size=2, epochs=2, use_sgd=True, lr=0.001, momentum=0.9, no_cuda=False, seed=1, eval=False, num_points=1024, dropout=0.5, model_path='')
+Using Apple MPS (Metal Performance Shaders) backend
+Namespace(exp_name='pct_cls', model='navie_pct', dataset='modelnet40', batch_size=2, test_batch_size=2, epochs=2, use_sgd=True, lr=0.001, momentum=0.9, no_cuda=False, seed=1, eval=False, num_points=1024, dropout=0.5, model_path='')
+Using Apple MPS (Metal Performance Shaders) backend
+Train 0, loss: 3.650456, train acc: 0.071341, train avg acc: 0.025153
+Test 0, loss: 3.774901, test acc: 0.040519, test avg acc: 0.025000
+Namespace(exp_name='pct_cls', model='pct', dataset='modelnet40', batch_size=2, test_batch_size=2, epochs=5, use_sgd=True, lr=0.0001, momentum=0.9, no_cuda=False, seed=1, eval=False, num_points=1024, dropout=0.5, model_path='')
+Using Apple MPS (Metal Performance Shaders) backend
+Namespace(exp_name='pct_cls', model='navie_pct', dataset='modelnet40', batch_size=2, test_batch_size=2, epochs=2, use_sgd=True, lr=0.0001, momentum=0.9, no_cuda=False, seed=1, eval=False, num_points=1024, dropout=0.5, model_path='')
+Using Apple MPS (Metal Performance Shaders) backend
+Train 0, loss: 4.184926, train acc: 0.068627, train avg acc: 0.030612
+Test 0, loss: 5.309804, test acc: 0.016613, test avg acc: 0.030250
+Train 1, loss: 4.081237, train acc: 0.098039, train avg acc: 0.036038
+Test 1, loss: 4.913676, test acc: 0.040519, test avg acc: 0.026000
+Namespace(exp_name='pct_cls', model='navie_pct', dataset='modelnet40', batch_size=2, test_batch_size=2, epochs=5, use_sgd=True, lr=0.0001, momentum=0.9, no_cuda=False, seed=1, eval=False, num_points=1024, dropout=0.5, model_path='')
+Using Apple MPS (Metal Performance Shaders) backend
+Train 0, loss: 4.184926, train acc: 0.068627, train avg acc: 0.030612
+Test 0, loss: 5.309804, test acc: 0.016613, test avg acc: 0.030250
+Train 1, loss: 4.464086, train acc: 0.049020, train avg acc: 0.023004
+Test 1, loss: 5.282266, test acc: 0.023906, test avg acc: 0.023360
+Train 2, loss: 4.505587, train acc: 0.039216, train avg acc: 0.025034
+Test 2, loss: 4.003233, test acc: 0.043760, test avg acc: 0.028244
+Train 3, loss: 4.242479, train acc: 0.039216, train avg acc: 0.025541
+Test 3, loss: 3.654424, test acc: 0.059562, test avg acc: 0.036750
+Train 4, loss: 4.066526, train acc: 0.019608, train avg acc: 0.009524
+Test 4, loss: 3.673732, test acc: 0.041329, test avg acc: 0.025500

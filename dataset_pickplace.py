@@ -6,7 +6,6 @@ from vis import *
 from sklearn.model_selection import train_test_split
 
 
-
 def custom_collate(batch):
     return {
         'point_cloud': [item['point_cloud'] for item in batch],
@@ -126,7 +125,7 @@ if __name__ == '__main__':
         print("mask shape:", np.array(mask[0]).shape)
         print("bbox3d shape:", np.array(bbox[0]).shape)
 
-        visualize_sample_plotly(pc[0], mask[0], bbox[0])
+        visualize_sample_mat(pc[0], mask[0], bbox[0])
        
     
         break

@@ -333,32 +333,32 @@ class PCTNormalEstimation(nn.Module):
 
 
 if __name__ == '__main__':
-    pc = torch.rand(4, 3, 1024).to('cuda')
-    cls_label = torch.rand(4, 16).to('cuda')
+    pc = torch.rand(4, 3, 1024).to('mps')
+    cls_label = torch.rand(4, 16).to('mps')
 
     # testing for cls networks
-    naive_pct_cls = NaivePCTCls().to('cuda')
-    spct_cls = SPCTCls().to('cuda')
-    pct_cls = PCTCls().to('cuda')
+    naive_pct_cls = NaivePCTCls().to('mps')
+    spct_cls = SPCTCls().to('mps')
+    pct_cls = PCTCls().to('mps')
 
     print(naive_pct_cls(pc).size())
     print(spct_cls(pc).size())
-    print(pct_cls(pc).size())
+    #print(pct_cls(pc).size())
 
     # testing for segmentation networks
-    naive_pct_seg = NaivePCTSeg().to('cuda')
-    spct_seg = SPCTSeg().to('cuda')
-    pct_seg = PCTSeg().to('cuda')
+    #naive_pct_seg = NaivePCTSeg().to('mps')
+    #spct_seg = SPCTSeg().to('mps')
+    #pct_seg = PCTSeg().to('mps')
 
-    print(naive_pct_seg(pc, cls_label).size())
-    print(spct_seg(pc, cls_label).size())
-    print(pct_seg(pc, cls_label).size())
+    #print(naive_pct_seg(pc, cls_label).size())
+    #print(spct_seg(pc, cls_label).size())
+    #print(pct_seg(pc, cls_label).size())
 
     # testing for normal estimation networks
-    naive_pct_ne = NaivePCTNormalEstimation().to('cuda')
-    spct_ne = SPCTNormalEstimation().to('cuda')
-    pct_ne = PCTNormalEstimation().to('cuda')
+    ##naive_pct_ne = NaivePCTNormalEstimation().to('mps')
+    #spct_ne = SPCTNormalEstimation().to('mps')
+    #pct_ne = PCTNormalEstimation().to('mps')
 
-    print(naive_pct_ne(pc).size())
-    print(spct_ne(pc).size())
-    print(pct_ne(pc).size())
+    #print(naive_pct_ne(pc).size())
+    #print(spct_ne(pc).size())
+    #print(pct_ne(pc).size())

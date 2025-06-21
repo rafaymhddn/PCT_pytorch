@@ -27,6 +27,8 @@ sudo apt-get update && sudo apt-get install -y unzip
 In order to training the model, you can use the following command:
 
 ```shell
+python cls.py --model=navie_pct --exp_name=pct_cls --num_points=1024 --use_sgd=True --batch_size=2 --epochs 5 --lr 0.0001
+
 python cls.py --model=pct --exp_name=pct_cls --num_points=1024 --use_sgd=True --batch_size=32 --epochs 250 --lr 0.0001
 ```
 

@@ -31,12 +31,14 @@ def _init_(args):
 
 
 def train(args, io):
-    train_loader = DataLoader(ModelNet40(partition='train', num_points=args.num_points), num_workers=8,
+    print("loading data")
+    train_loader = DataLoader(ModelNet40(partition='train', num_points=args.num_points), num_workers=2,
                             batch_size=args.batch_size, shuffle=True, drop_last=True)
-    test_loader = DataLoader(ModelNet40(partition='test', num_points=args.num_points), num_workers=8,
+    test_loader = DataLoader(ModelNet40(partition='test', num_points=args.num_points), num_workers=2,
                             batch_size=args.test_batch_size, shuffle=True, drop_last=False)
 
-    device = torch.device("cuda" if args.cuda else "cpu")
+    device = args.device
+    print(f"The devise is: {device}")
 
     model = models[args.model]().to(device)
     model = nn.DataParallel(model)
@@ -53,6 +55,8 @@ def train(args, io):
     criterion = cal_loss
     best_test_acc = 0
 
+
+    print("Starting training")
     for epoch in range(args.epochs):
         train_loss = 0.0
         count = 0.0  # numbers of data
@@ -74,14 +78,17 @@ def train(args, io):
             opt.step()
             end_time = time.time()
             total_time += (end_time - start_time)
-            
             preds = logits.max(dim=1)[1]
             count += batch_size
             train_loss += loss.item() * batch_size
             train_true.append(label.cpu().numpy())
             train_pred.append(preds.detach().cpu().numpy())
+            print(f"Iter {idx}, Total Time {total_time}, Train_loss {train_loss} \n")
             idx += 1
-            
+            if idx > 50: 
+                break
+
+        print("----------")
         print ('train total time is',total_time)
         train_true = np.concatenate(train_true)
         train_pred = np.concatenate(train_pred)
@@ -90,6 +97,7 @@ def train(args, io):
                                                                                  metrics.accuracy_score(train_true, train_pred),
                                                                                  metrics.balanced_accuracy_score(train_true, train_pred))
         io.cprint(outstr)
+        print("----------")
 
         ####################
         # Test
@@ -135,7 +143,7 @@ def test(args, io):
     test_loader = DataLoader(ModelNet40(partition='test', num_points=args.num_points),
                             batch_size=args.test_batch_size, shuffle=True, drop_last=False)
 
-    device = torch.device("cuda" if args.cuda else "cpu")
+    device = torch.device("mps" if args.cuda else "cpu")
 
     model = models[args.model]().to(device)
     model = nn.DataParallel(model) 
@@ -172,7 +180,7 @@ if __name__ == "__main__":
                         choices=['modelnet40'])
     parser.add_argument('--batch_size', type=int, default=32, metavar='batch_size',
                         help='Size of batch)')
-    parser.add_argument('--test_batch_size', type=int, default=16, metavar='batch_size',
+    parser.add_argument('--test_batch_size', type=int, default=2, metavar='batch_size',
                         help='Size of batch)')
     parser.add_argument('--epochs', type=int, default=250, metavar='N',
                         help='number of episode to train ')
@@ -201,16 +209,23 @@ if __name__ == "__main__":
     io = Logger('checkpoints/' + args.exp_name + '/run.log')
     io.cprint(str(args))
 
-    args.cuda = not args.no_cuda and torch.cuda.is_available()
-    torch.manual_seed(args.seed)
-    if args.cuda:
-        io.cprint(
-            'Using GPU : ' + str(torch.cuda.current_device()) + ' from ' + str(torch.cuda.device_count()) + ' devices')
+    # Set device: CUDA > MPS > CPU
+    if torch.cuda.is_available():
+        args.device = torch.device("cuda")
+        io.cprint(f'Using GPU : {torch.cuda.current_device()} from {torch.cuda.device_count()} devices')
         torch.cuda.manual_seed(args.seed)
+    elif torch.backends.mps.is_available() and torch.backends.mps.is_built():
+        args.device = torch.device("mps")
+        io.cprint("Using Apple MPS (Metal Performance Shaders) backend")
+        torch.manual_seed(args.seed)
     else:
-        io.cprint('Using CPU')
+        args.device = torch.device("cpu")
+        io.cprint("Using CPU")
+        torch.manual_seed(args.seed)
 
+    # Now run training or evaluation
     if not args.eval:
         train(args, io)
     else:
         test(args, io)
+

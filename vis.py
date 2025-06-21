@@ -6,6 +6,63 @@ import matplotlib.pyplot as plt
 import plotly.graph_objects as go
 import numpy as np
 
+
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d.art3d import Line3DCollection
+import numpy as np
+
+def visualize_sample_mat(pc, mask, bbox3d):
+    pc = np.array(pc)
+    mask = np.array(mask)
+    bbox3d = np.array(bbox3d)
+
+    H, W, _ = pc.shape
+    points = pc.reshape(-1, 3)  # [H*W, 3]
+
+    # Assign instance IDs from mask
+    instance_ids = np.full((H * W,), -1)  # -1 means background
+    for idx in range(mask.shape[0]):
+        m = mask[idx].reshape(-1)
+        instance_ids[m > 0] = idx
+
+    # Generate color map
+    num_instances = mask.shape[0]
+    colormap = plt.cm.get_cmap('tab20', num_instances)
+    colors = np.zeros((H * W, 4))
+    for i in range(H * W):
+        inst_id = instance_ids[i]
+        if inst_id >= 0:
+            colors[i] = colormap(inst_id)
+        else:
+            colors[i] = (0.5, 0.5, 0.5, 0.2)  # light gray for background
+
+    # Plot point cloud
+    fig = plt.figure(figsize=(10, 8))
+    ax = fig.add_subplot(111, projection='3d')
+    ax.scatter(points[:, 0], points[:, 1], points[:, 2], c=colors, s=1)
+
+    # Define bbox edges
+    edges = [
+        (0, 1), (1, 2), (2, 3), (3, 0),
+        (4, 5), (5, 6), (6, 7), (7, 4),
+        (0, 4), (1, 5), (2, 6), (3, 7)
+    ]
+
+    # Draw each bounding box
+    for box in bbox3d:
+        lines = [(box[start], box[end]) for start, end in edges]
+        line_collection = Line3DCollection(lines, colors='black', linewidths=1)
+        ax.add_collection3d(line_collection)
+
+    ax.set_title('3D Point Cloud with Masks and BBoxes')
+    ax.set_xlabel('X')
+    ax.set_ylabel('Y')
+    ax.set_zlabel('Z')
+    ax.set_box_aspect([1, 1, 1])
+    plt.tight_layout()
+    plt.show()
+
+
 def visualize_sample_plotly(pc, mask, bbox3d):
     pc = np.array(pc)
     mask = np.array(mask)
