@@ -2,113 +2,256 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from module import Embedding, NeighborEmbedding, OA, SA
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from sklearn.cluster import DBSCAN
 
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
 
-class NaivePCT(nn.Module):
-    def __init__(self):
-        super().__init__()
+class InstancePointNet(nn.Module):
+    def __init__(self, feat_dim=64, max_instances=20):
+        super(InstancePointNet, self).__init__()
+        self.feat_dim = feat_dim
+        self.max_instances = max_instances  # Max number of instances to predict
 
-        self.embedding = Embedding(3, 128)
+        # Point-wise feature extraction (shared MLP)
+        self.mlp1 = nn.Linear(3, 64)
+        self.mlp2 = nn.Linear(64, 128)
+        self.mlp3 = nn.Linear(128, feat_dim)
 
-        self.sa1 = SA(128)
-        self.sa2 = SA(128)
-        self.sa3 = SA(128)
-        self.sa4 = SA(128)
+        # Instance Mask Head (predicts per-instance masks)
+        self.mask_head = nn.ModuleList([
+            nn.Sequential(
+                nn.Linear(feat_dim, 64),
+                nn.ReLU(),
+                nn.Linear(64, 1)  # Mask logit per point
+            ) for _ in range(max_instances)
+        ])
 
-        self.linear = nn.Sequential(
-            nn.Conv1d(512, 1024, kernel_size=1, bias=False),
-            nn.BatchNorm1d(1024),
-            nn.LeakyReLU(negative_slope=0.2)
-        )
-    
-    def forward(self, x):
-        x = self.embedding(x)
-        
-        x1 = self.sa1(x)
-        x2 = self.sa2(x1)
-        x3 = self.sa3(x2)
-        x4 = self.sa4(x3)
-        x = torch.cat([x1, x2, x3, x4], dim=1)
-
-        x = self.linear(x)
-
-        # x = F.adaptive_max_pool1d(x, 1).view(batch_size, -1)
-        x_max = torch.max(x, dim=-1)[0]
-        x_mean = torch.mean(x, dim=-1)
-
-        return x, x_max, x_mean
-
-
-class Segmentation(nn.Module):
-    def __init__(self, part_num):
-        super().__init__()
-
-        self.part_num = part_num
-
-        self.label_conv = nn.Sequential(
-            nn.Conv1d(16, 64, kernel_size=1, bias=False),
-            nn.BatchNorm1d(64),
-            nn.LeakyReLU(negative_slope=0.2)
+        # Detection Heads
+        self.centroid_head = nn.Sequential(
+            nn.Linear(feat_dim, 64),
+            nn.ReLU(),
+            nn.Linear(64, 3)  # centroid (x, y, z)
         )
 
-        self.convs1 = nn.Conv1d(1024 * 3 + 64, 512, 1)
-        self.convs2 = nn.Conv1d(512, 256, 1)
-        self.convs3 = nn.Conv1d(256, self.part_num, 1)
+        self.bbox_head = nn.Sequential(
+            nn.Linear(feat_dim, 128),
+            nn.ReLU(),
+            nn.Linear(128, 24),  # 8 corners × 3 coords
+        )
 
-        self.bns1 = nn.BatchNorm1d(512)
-        self.bns2 = nn.BatchNorm1d(256)
+    def forward(self, pc):  # pc: [P, 3]
+        x = F.relu(self.mlp1(pc))
+        x = F.relu(self.mlp2(x))
+        features = self.mlp3(x)  # [P, feat_dim]
 
-        self.dp1 = nn.Dropout(0.5)
-    
-    def forward(self, x, x_max, x_mean):
-        batch_size, _, N = x.size()
+        # Global feature for detection
+        global_feat = torch.max(features, dim=0, keepdim=True)[0]  # [1, feat_dim]
 
-        x_max_feature = x_max.unsqueeze(-1).repeat(1, 1, N)
-        x_mean_feature = x_mean.unsqueeze(-1).repeat(1, 1, N)
+        instance_preds = []
+        for i in range(self.max_instances):
+            # Predict per-point logits for this instance
+            mask_logits = self.mask_head[i](features).squeeze(-1)  # [P]
 
-        #cls_label_one_hot = cls_label.view(batch_size, 16, 1)
-        #cls_label_feature = self.label_conv(cls_label_one_hot).repeat(1, 1, N)
+            # Optionally: mask global features using predicted logits
+            masked_feat = torch.sum(
+                features * mask_logits.unsqueeze(-1).sigmoid(), dim=0, keepdim=True
+            ) / (mask_logits.sigmoid().sum() + 1e-6)
 
-        x = torch.cat([x, x_max_feature, x_mean_feature,], dim=1)  # 1024 * 3 + 64
+            centroid = self.centroid_head(masked_feat).squeeze(0)  # [3]
+            bbox = self.bbox_head(masked_feat).view(8, 3)          # [8, 3]
 
-        x = F.relu(self.bns1(self.convs1(x)))
-        x = self.dp1(x)
-        x = F.relu(self.bns2(self.convs2(x)))
-        x = self.convs3(x)
+            instance_preds.append({
+                'mask_logit': mask_logits,
+                'centroid': centroid,
+                'bbox': bbox
+            })
 
-        return x
-
-
-
-"""
-Part Segmentation Networks.
-"""
-
-class NaivePCTSeg(nn.Module):
-    def __init__(self, part_num=50):
-        super().__init__()
-    
-        self.encoder = NaivePCT()
-        self.seg = Segmentation(part_num)
-
-    def forward(self, x):
-        x, x_max, x_mean = self.encoder(x)
-        x = self.seg(x, x_max, x_mean)
-        return x
-
-
+        return {
+            'instance_preds': instance_preds  # List of dicts with mask/centroid/bbox
+        }
 
 if __name__ == '__main__':
-    pc = torch.rand(4, 3, 1024).to('cuda')
+
+    from dataset_pickplace import get_dataloaders
+
+
+    import torch, random
+    import numpy as np
+
+    # Use MPS device if available
+    device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
+
+    # Instantiate and move model to MPS
+    model = InstancePointNet().to(device)
+    model.eval()
+
+    data_root = 'data/pick_place'
+    train_loader, val_loader, test_loader = get_dataloaders(data_root)
+
+    for batch in train_loader:
+        pc = batch['point_cloud']   # [B, Points, 3]
+        mask = batch['mask']        # [B, N, Points]
+        bbox = batch['bbox3d']      # [B, N, 8, 3]
+        centroid = batch['centroid']# [B, N, 3]
+
+        # Use only the first sample in the batch
+        pc_sample = pc[0]           # [Points, 3]
+        mask_sample = mask[0]       # [N, Points]
+        bbox_sample = bbox[0]       # [N, 8, 3]
+        centroid_sample = centroid[0] # [N, 3]
+
+        print("point_cloud shape:", np.array(pc_sample).shape)
+        print("mask shape:", np.array(mask_sample).shape)
+        print("bbox3d shape:", np.array(bbox_sample).shape)
+        print("centroid shape:", np.array(centroid_sample).shape)
+
+        # Optional: still visualize using NumPy
+        #visualize_sample_plotly(pc_sample, mask_sample, bbox_sample)
+
+        # ✅ Convert to Tensor and move to MPS device
+        pc_tensor = torch.tensor(pc_sample, dtype=torch.float32).to(device)
+
+        # Forward pass
+        with torch.no_grad():
+            outputs = model(pc_tensor)
+
+        print("Number of predicted instances:", len(outputs['instance_preds']))
+        for i, inst in enumerate(outputs['instance_preds']):
+            print(f"\nInstance {i}:")
+            print("  mask_logit:", inst['mask_logit'].shape)   # [Points]
+            print("  centroid:", inst['centroid'].shape)       # [3]
+            print("  bbox:", inst['bbox'].shape)               # [8, 3]
+
+        break
+
     
 
+    import torch
+    import torch.nn as nn
+    import torch.optim as optim
 
-    # testing for segmentation networks
-    naive_pct_seg = NaivePCTSeg().to('cuda')
+    # Load model and move to device
+    device = torch.device("mps" if torch.cuda.is_available() else "mps")
+    model = InstancePointNet(max_instances=25).to(device)  # Set to your expected max N
 
-    print(naive_pct_seg(pc).size())
-    print(pc.size())
+    # Loss functions
+    bce_loss = nn.BCEWithLogitsLoss()
+    mse_loss = nn.MSELoss()
 
+    # Optimizer
+    optimizer = optim.Adam(model.parameters(), lr=1e-3)
 
-    # testing for normal estimation networks
+    # === Get One Sample ===
+    data_root = 'data/pick_place'
+    train_loader, _, _ = get_dataloaders(data_root)
+
+    for batch in train_loader:
+        pc_sample = torch.from_numpy(batch['point_cloud'][0]).float().to(device)
+        mask_sample = torch.from_numpy(batch['mask'][0]).float().to(device)
+        bbox_sample = torch.from_numpy(batch['bbox3d'][0]).float().to(device)
+        centroid_sample = torch.from_numpy(batch['centroid'][0]).float().to(device)
+        break  # Only use the first sample
+
+    # Move to CPU and package in a dictionary
+    sample = {
+        'point_cloud': pc_sample.cpu(),
+        'mask': mask_sample.cpu(),
+        'bbox3d': bbox_sample.cpu(),
+        'centroid': centroid_sample.cpu()
+    }
+
+    # Save to a single .pt file
+    torch.save(sample, 'first_sample.pt')
+
+    num_instances = mask_sample.shape[0]  # N
+    pc_sample = pc_sample.float()
+
+    # === Training Loop ===
+    for epoch in range(500):
+        model.train()
+        optimizer.zero_grad()
+
+        output = model(pc_sample)  # pc_sample: [Points, 3]
+        preds = output['instance_preds']  # List of N_pred items
+
+        total_loss = 0.0
+        for i in range(num_instances):
+            pred = preds[i]
+
+            # Mask loss
+            mask_logit = pred['mask_logit']         # [Points]
+            gt_mask = mask_sample[i]                # [Points]
+            loss_mask = bce_loss(mask_logit, gt_mask)
+
+            # Centroid loss
+            pred_centroid = pred['centroid']        # [3]
+            gt_centroid = centroid_sample[i]        # [3]
+            loss_centroid = mse_loss(pred_centroid, gt_centroid)
+
+            # BBox loss
+            pred_bbox = pred['bbox']                # [8, 3]
+            gt_bbox = bbox_sample[i]                # [8, 3]
+            loss_bbox = mse_loss(pred_bbox, gt_bbox)
+
+            # Combine
+            loss = loss_mask + loss_centroid + loss_bbox
+            total_loss += loss
+
+            print(f"Total Loss {total_loss}")
+
+        total_loss.backward()
+        optimizer.step()
+        print(f"[Epoch {epoch}] Loss: {total_loss.item():.4f}")
+
+        if epoch % 50 == 0:
+            print(f"[Epoch {epoch}] Loss: {total_loss.item():.4f}")
+            # Save model weights after training
+            save_path = "instance_pointnet_overfit.pth"
+            torch.save(model.state_dict(), save_path)
+            print(f"Model weights saved to: {save_path}")
+
+    
+    # Run inference
+    with torch.no_grad():
+        output = model(pc_sample)
+        preds = output['instance_preds']
+
+    torch.save(preds.cpu(), 'instance_preds.pt')
+    num_instances = mask_sample.shape[0]
+
+    for i in range(num_instances):
+        pred = preds[i]
+
+        # Predicted mask (apply sigmoid to logits)
+        pred_mask = torch.sigmoid(pred['mask_logit']) > 0.5  # binary mask
+
+        # Ground truth mask
+        gt_mask = mask_sample[i] > 0.5
+
+        # Predicted centroid and bbox
+        pred_centroid = pred['centroid']
+        pred_bbox = pred['bbox']
+
+        # Ground truth centroid and bbox
+        gt_centroid = centroid_sample[i]
+        gt_bbox = bbox_sample[i]
+
+        # Calculate Mask IoU
+        intersection = (pred_mask & gt_mask).sum().item()
+        union = (pred_mask | gt_mask).sum().item()
+        iou = intersection / union if union > 0 else 0
+
+        # Bbox difference (mean L2 distance)
+        bbox_diff = torch.norm(pred_bbox - gt_bbox, dim=1).mean().item()
+
+        print(f"\nInstance {i}:")
+        print(f" - Mask IoU: {iou:.4f}")
+        print(f" - Centroid Prediction: {pred_centroid.cpu().numpy()}")
+        print(f" - Centroid Ground Truth: {gt_centroid.cpu().numpy()}")
+        print(f" - BBox Mean L2 Diff: {bbox_diff:.4f}")
+

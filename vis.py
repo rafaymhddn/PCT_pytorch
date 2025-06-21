@@ -1,199 +1,100 @@
-import numpy as np
-import open3d as o3d
-import matplotlib.pyplot as plt
-
-
 import plotly.graph_objects as go
+import plotly.express as px
 import numpy as np
 
+def visualize_sample_plotly(pc, mask, bbox3d, show_background=False):
+    """
+    Interactive Plotly visualization of 3D point cloud with instance masks, centroids, and 3D bounding boxes.
 
-import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d.art3d import Line3DCollection
-import numpy as np
+    Args:
+        pc: [P, 3] point cloud
+        mask: [N, P] binary masks
+        bbox3d: [N, 8, 3] bounding boxes with 8 corner points
+        show_background: bool, whether to display unlabeled points (background)
+    """
+    pc = np.asarray(pc)
+    mask = np.asarray(mask)
+    bbox3d = np.asarray(bbox3d)
 
-def visualize_sample_mat(pc, mask, bbox3d):
-    pc = np.array(pc)
-    mask = np.array(mask)
-    bbox3d = np.array(bbox3d)
+    P = pc.shape[0]
+    N = mask.shape[0]
 
-    H, W, _ = pc.shape
-    points = pc.reshape(-1, 3)  # [H*W, 3]
+    # Assign each point its instance ID
+    instance_ids = np.full((P,), -1)
+    for idx in range(N):
+        instance_ids[mask[idx] > 0] = idx
 
-    # Assign instance IDs from mask
-    instance_ids = np.full((H * W,), -1)  # -1 means background
-    for idx in range(mask.shape[0]):
-        m = mask[idx].reshape(-1)
-        instance_ids[m > 0] = idx
+    # Color map
+    colorscale = px.colors.qualitative.Dark24  # 24 distinct colors
+    num_colors = len(colorscale)
 
-    # Generate color map
-    num_instances = mask.shape[0]
-    colormap = plt.cm.get_cmap('tab20', num_instances)
-    colors = np.zeros((H * W, 4))
-    for i in range(H * W):
-        inst_id = instance_ids[i]
-        if inst_id >= 0:
-            colors[i] = colormap(inst_id)
-        else:
-            colors[i] = (0.5, 0.5, 0.5, 0.2)  # light gray for background
+    fig = go.Figure()
 
-    # Plot point cloud
-    fig = plt.figure(figsize=(10, 8))
-    ax = fig.add_subplot(111, projection='3d')
-    ax.scatter(points[:, 0], points[:, 1], points[:, 2], c=colors, s=1)
+    # Add point cloud per instance
+    centroids = []
+    for i in range(N):
+        inds = np.where(instance_ids == i)[0]
+        if inds.size == 0:
+            centroids.append(np.array([np.nan, np.nan, np.nan]))
+            continue
+        pts = pc[inds]
+        cent = pts.mean(axis=0)
+        centroids.append(cent)
 
-    # Define bbox edges
+        fig.add_trace(go.Scatter3d(
+            x=pts[:, 0], y=pts[:, 1], z=pts[:, 2],
+            mode='markers',
+            marker=dict(size=2, color=colorscale[i % num_colors]),
+            showlegend=False  # Remove legend entries for points
+        ))
+
+        # Add centroid point
+        fig.add_trace(go.Scatter3d(
+            x=[cent[0]], y=[cent[1]], z=[cent[2]],
+            mode='markers',
+            marker=dict(size=7, color='black', symbol='x'),
+            showlegend=False  # No legend for centroids
+        ))
+
+    centroids = np.vstack(centroids)  # Shape: [N, 3]
+
+    # Add unlabeled/background points if enabled
+    if show_background:
+        bg_inds = np.where(instance_ids == -1)[0]
+        if bg_inds.size > 0:
+            pts = pc[bg_inds]
+            fig.add_trace(go.Scatter3d(
+                x=pts[:, 0], y=pts[:, 1], z=pts[:, 2],
+                mode='markers',
+                marker=dict(size=1, color='gray', opacity=0.3),
+                showlegend=False  # Remove legend for background points
+            ))
+
+    # Draw bounding boxes
     edges = [
         (0, 1), (1, 2), (2, 3), (3, 0),
         (4, 5), (5, 6), (6, 7), (7, 4),
         (0, 4), (1, 5), (2, 6), (3, 7)
     ]
 
-    # Draw each bounding box
-    for box in bbox3d:
-        lines = [(box[start], box[end]) for start, end in edges]
-        line_collection = Line3DCollection(lines, colors='black', linewidths=1)
-        ax.add_collection3d(line_collection)
+    for i, box in enumerate(bbox3d):
+        for s, e in edges:
+            x, y, z = zip(box[s], box[e])
+            fig.add_trace(go.Scatter3d(
+                x=x, y=y, z=z,
+                mode='lines',
+                line=dict(color='black', width=2),
+                showlegend=False  # Remove legend for bbox lines
+            ))
 
-    ax.set_title('3D Point Cloud with Masks and BBoxes')
-    ax.set_xlabel('X')
-    ax.set_ylabel('Y')
-    ax.set_zlabel('Z')
-    ax.set_box_aspect([1, 1, 1])
-    plt.tight_layout()
-    plt.show()
-
-
-def visualize_sample_plotly(pc, mask, bbox3d):
-    pc = np.array(pc)
-    mask = np.array(mask)
-    bbox3d = np.array(bbox3d)
-
-    H, W, _ = pc.shape
-    points = pc.reshape(-1, 3)  # [H*W, 3]
-
-    # Determine instance ids for each point using masks
-    instance_ids = np.zeros(H * W, dtype=int) - 1  # -1 for background
-    for idx in range(mask.shape[0]):
-        m = mask[idx].reshape(-1)  # [H*W]
-        instance_ids[m > 0] = idx
-
-    # Generate colors for each instance
-    colors = np.zeros((H * W, 3))
-    num_instances = mask.shape[0]
-    colormap = np.random.rand(num_instances, 3)  # Random color per instance
-
-    for i in range(H * W):
-        inst_id = instance_ids[i]
-        if inst_id >= 0:
-            colors[i] = colormap[inst_id]
-
-    # Point cloud scatter
-    scatter = go.Scatter3d(
-        x=points[:, 0],
-        y=points[:, 1],
-        z=points[:, 2],
-        mode='markers',
-        marker=dict(size=2, color=['rgb({}, {}, {})'.format(*c * 255) for c in colors])
+    fig.update_layout(
+        title='3D Point Cloud with Instance Masks, Centroids, and BBoxes',
+        scene=dict(
+            xaxis_title='X', yaxis_title='Y', zaxis_title='Z',
+            aspectmode='data',
+        ),
+        showlegend=False  # Remove all legends
     )
 
-    # Draw bounding boxes as lines
-    lines = []
-    edges = [
-        (0, 1), (1, 2), (2, 3), (3, 0),  # Bottom face
-        (4, 5), (5, 6), (6, 7), (7, 4),  # Top face
-        (0, 4), (1, 5), (2, 6), (3, 7)   # Vertical edges
-    ]
-
-    for box in bbox3d:
-        for (i, j) in edges:
-            lines.append(
-                go.Scatter3d(
-                    x=[box[i, 0], box[j, 0]],
-                    y=[box[i, 1], box[j, 1]],
-                    z=[box[i, 2], box[j, 2]],
-                    mode='lines',
-                    line=dict(color='black', width=2),
-                    showlegend=False
-                )
-            )
-
-    fig = go.Figure(data=[scatter] + lines)
-    fig.update_layout(scene=dict(aspectmode='data'), title="3D Point Cloud with Masks and BBoxes")
     fig.show()
-
-
-def visualize_sample(pc, masks, bboxes):
-    """
-    Visualize a single sample with its instance masks and bounding boxes.
-    
-    Args:
-        pc (np.ndarray): Point cloud array of shape (H, W, 3).
-        masks (np.ndarray): Mask array of shape (N, H, W), where N is the number of instances.
-        bboxes (np.ndarray): Bounding boxes array of shape (N, 8, 3).
-    """
-    
-    # Prepare a color palette for the different instances.
-    num_instances = masks.shape[0]
-    # We use a colormap to get distinct colors for each instance.
-    colors_palette = plt.cm.get_cmap('tab10', num_instances)
-    
-    scene_points_list = []
-    scene_colors_list = []
-    all_bbox_geometries = []
-    
-    # Iterate through each instance to color its points and create its bounding box.
-    for i in range(num_instances):
-        # Create a boolean mask for the current instance.
-        instance_mask = masks[i] > 0  # Shape: (H, W)
-        
-        # Use the boolean mask to select points from the point cloud.
-        instance_points = pc[instance_mask]  # Shape: (num_points_in_instance, 3)
-        
-        # Skip if the current mask has no corresponding points.
-        if len(instance_points) == 0:
-            continue
-            
-        # Assign a unique color to this instance's points.
-        color = colors_palette(i)[:3]  # Get RGB values from the colormap.
-        instance_colors = np.tile(color, (instance_points.shape[0], 1))
-        
-        scene_points_list.append(instance_points)
-        scene_colors_list.append(instance_colors)
-        
-        # Define the edges for an Open3D bounding box.
-        edges = [
-            [0, 1], [1, 2], [2, 3], [3, 0],  # Bottom face
-            [4, 5], [5, 6], [6, 7], [7, 4],  # Top face
-            [0, 4], [1, 5], [2, 6], [3, 7]   # Vertical edges connecting faces
-        ]
-        
-        # Create an Open3D LineSet object for the bounding box.
-        box_geometry = o3d.geometry.LineSet(
-            points=o3d.utility.Vector3dVector(bboxes[i]),
-            lines=o3d.utility.Vector2iVector(edges)
-        )
-        box_geometry.paint_uniform_color(color)
-        all_bbox_geometries.append(box_geometry)
-    
-    # If no points were found in any instance, print a message and exit.
-    if not scene_points_list:
-        print("Warning: No points found for any instance masks. Nothing to visualize.")
-        return
-    
-    # Combine the points and colors from all instances into single arrays.
-    scene_points = np.concatenate(scene_points_list, axis=0)
-    scene_colors = np.concatenate(scene_colors_list, axis=0)
-    
-    # Create the final Open3D PointCloud object.
-    scene_pcd = o3d.geometry.PointCloud()
-    scene_pcd.points = o3d.utility.Vector3dVector(scene_points)
-    scene_pcd.colors = o3d.utility.Vector3dVector(scene_colors)
-    
-    # Visualize the point cloud and all bounding boxes together.
-    #print(f"Visualizing {len(all_bbox_geometries)} instances...")
-    #print(f"Total points in scene: {len(scene_points)}")
-    o3d.visualization.draw_geometries(
-        [scene_pcd] + all_bbox_geometries,
-        window_name="Segmented Point Cloud with Bounding Boxes"
-    )
 

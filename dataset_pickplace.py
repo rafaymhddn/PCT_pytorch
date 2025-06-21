@@ -1,16 +1,20 @@
 import os
+import random
 import glob
 import numpy as np
 from torch.utils.data import Dataset
 from vis import *
 from sklearn.model_selection import train_test_split
 
+from torch.utils.data import DataLoader
+from sklearn.model_selection import train_test_split
 
 def custom_collate(batch):
     return {
         'point_cloud': [item['point_cloud'] for item in batch],
         'mask': [item['mask'] for item in batch],
-        'bbox3d': [item['bbox3d'] for item in batch]
+        'bbox3d': [item['bbox3d'] for item in batch], 
+        'centroid': [item['centroid'] for item in batch]
     }
 
 class PickPlaceDataset(Dataset):
@@ -26,27 +30,36 @@ class PickPlaceDataset(Dataset):
         sample_id = self.sample_ids[idx]
         sample_path = os.path.join(self.root_dir, sample_id)
 
-        pc = np.load(os.path.join(sample_path, 'pc.npy'))        # [3, H, W]
+        pc = np.load(os.path.join(sample_path, 'pc.npy'))        # [3, H, W] or [H, W, 3] ?
         mask = np.load(os.path.join(sample_path, 'mask.npy'))    # [N, H, W]
-        bbox = np.load(os.path.join(sample_path, 'bbox3d.npy'))  # [B, 7] or similar
+        bbox = np.load(os.path.join(sample_path, 'bbox3d.npy'))  #  [N, 8, 3]
 
-        if pc.shape[0] == 3 and pc.shape[1] != 3:
-            pc = pc.T # [3, W, H ]
-            mask = mask.transpose(0, 2, 1)  # Now shape is [N, W, H]
+        H, W = pc.shape[1], pc.shape[2]
+        pc = pc.reshape(3, -1).transpose(1, 0)  # shape: [Points, 3]
+
+        # Reshape mask: [N, H, W] → [N, H*W]
+        mask = mask.reshape(mask.shape[0], -1)  # shape: [N, Points]
+
+        # Flip ?
 
         if self.augment:
             pc, bbox = self.apply_augmentations(pc, bbox)
+
         
+
+
         return {
             'point_cloud': pc.astype(np.float32),
             'mask': mask.astype(np.int64),
-            'bbox3d': bbox.astype(np.float32)
+            'bbox3d': bbox.astype(np.float32),
+            'centroid': bbox.mean(axis=1).astype(np.float32)
+
         }
     
     def apply_augmentations(self, pc, bbox):
         """
         Applies a series of random augmentations to the point cloud and bounding box.
-        Assumes pc is [N, 3] and bbox is [B, 8, 3].
+        Assumes pc is [N, 3] and bbox is [N, 8, 3].
         """
         # 1. Random Rotation around the Z-axis
         angle = random.uniform(0, 2 * np.pi)
@@ -69,8 +82,7 @@ class PickPlaceDataset(Dataset):
         bbox += jitter
         
         return pc, bbox
-
-
+    
 def get_dataloaders(data_root, batch_size=16, seed=42, train_size=0.8):
         
         all_sample_ids = sorted(os.listdir(data_root))
@@ -99,35 +111,30 @@ def get_dataloaders(data_root, batch_size=16, seed=42, train_size=0.8):
         test_loader = DataLoader(test_set, batch_size=batch_size, shuffle=False, collate_fn=custom_collate)
 
         return train_loader, val_loader, test_loader
-
-
 if __name__ == '__main__':
 
 
-    import os
-    import random
-    from torch.utils.data import DataLoader
-    from sklearn.model_selection import train_test_split
+
 
     
-    
-    # Testing
     
     data_root = 'data/pick_place'
     train_loader, val_loader, test_loader = get_dataloaders(data_root)
 
     for batch in train_loader:
-        pc = batch['point_cloud']  # [H, W, 3]
-        mask = batch['mask']       # [N, H, W]
-        bbox = batch['bbox3d']     # [N, 8, 3] 
+            pc = batch['point_cloud']   # [Points, 3]
+            mask = batch['mask']        # [N, Points]
+            bbox = batch['bbox3d']      # [N, 8, 3] 
+            centroid = batch['centroid']# [N, 3] 
 
-        print("point_cloud shape:", np.array(pc[0]).shape)
-        print("mask shape:", np.array(mask[0]).shape)
-        print("bbox3d shape:", np.array(bbox[0]).shape)
+            print("point_cloud shape:", np.array(pc[0]).shape)
+            print("mask shape:", np.array(mask[0]).shape)
+            print("bbox3d shape:", np.array(bbox[0]).shape)
+            print("centroid shape:", np.array(centroid[0]).shape)
 
-        visualize_sample_mat(pc[0], mask[0], bbox[0])
-       
-    
-        break
+            visualize_sample_plotly(pc[0], mask[0], bbox[0])
+        
+        
+            break
 
 

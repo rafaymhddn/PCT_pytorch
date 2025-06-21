@@ -11,6 +11,7 @@ from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import CosineAnnealingLR
 
 from dataset import ModelNet40
+from dataset_pickplace import PickPlaceDataset, get_dataloaders
 from model import NaivePCTCls, SPCTCls, PCTCls, NaivePCTSeg
 from util import cal_loss, Logger
 
@@ -31,10 +32,14 @@ def _init_(args):
 
 
 def train(args, io):
-    train_loader = DataLoader(ModelNet40(partition='train', num_points=args.num_points), num_workers=8,
+    train_loader = DataLoader(ModelNet40(partition='train', num_points=args.num_points), num_workers=2,
                             batch_size=args.batch_size, shuffle=True, drop_last=True)
-    test_loader = DataLoader(ModelNet40(partition='test', num_points=args.num_points), num_workers=8,
+    test_loader = DataLoader(ModelNet40(partition='test', num_points=args.num_points), num_workers=2,
                             batch_size=args.test_batch_size, shuffle=True, drop_last=False)
+    
+    data_root = 'data/pick_place'
+    train_loader, val_loader, test_loader = get_dataloaders(data_root)
+    
 
     device = args.device
     print(device)

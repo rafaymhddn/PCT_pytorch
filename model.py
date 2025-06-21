@@ -5,6 +5,62 @@ import torch.nn.functional as F
 from module import Embedding, NeighborEmbedding, OA, SA
 
 
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+
+class SimplePointNet(nn.Module):
+    def __init__(self, feat_dim=64):
+        super(SimplePointNet, self).__init__()
+        self.feat_dim = feat_dim
+        
+        # Point-wise feature extraction (shared MLP)
+        self.mlp1 = nn.Linear(3, 64)
+        self.mlp2 = nn.Linear(64, 128)
+        self.mlp3 = nn.Linear(128, feat_dim)
+
+        # Segmentation Head
+        self.seg_head = nn.Sequential(
+            nn.Linear(feat_dim, 64),
+            nn.ReLU(),
+            nn.Linear(64, 1),  # output: foreground mask probability
+        )
+
+        # Detection Head (centroid regression + bbox regression)
+        self.centroid_head = nn.Sequential(
+            nn.Linear(feat_dim, 64),
+            nn.ReLU(),
+            nn.Linear(64, 3)  # centroid (x, y, z)
+        )
+
+        self.bbox_head = nn.Sequential(
+            nn.Linear(feat_dim, 128),
+            nn.ReLU(),
+            nn.Linear(128, 24),  # 8 corners × 3 coords
+        )
+
+    def forward(self, pc):  # pc: [P, 3]
+        x = F.relu(self.mlp1(pc))
+        x = F.relu(self.mlp2(x))
+        features = self.mlp3(x)  # [P, feat_dim]
+
+        # Segmentation (instance-agnostic for now)
+        seg_logits = self.seg_head(features).squeeze(-1)  # [P]
+
+        # Global feature for detection (simple max pool)
+        global_feat = torch.max(features, dim=0, keepdim=True)[0]  # [1, feat_dim]
+
+        centroid_pred = self.centroid_head(global_feat).squeeze(0)  # [3]
+        bbox_pred = self.bbox_head(global_feat).view(8, 3)  # [8, 3]
+
+        return {
+            "seg_logits": seg_logits,       # [P]
+            "centroid_pred": centroid_pred, # [3]
+            "bbox_pred": bbox_pred          # [8, 3]
+        }
+
+
 class NaivePCT(nn.Module):
     def __init__(self):
         super().__init__()
